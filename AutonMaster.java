@@ -1,97 +1,134 @@
-
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+import com.acmerobotics.roadrunner.Pose2d;
+import com.acmerobotics.roadrunner.Vector2d;
+import com.acmerobotics.roadrunner.ftc.Actions;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.util.ElapsedTime;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.robotcore.external.tfod.Recognition;
+import org.firstinspires.ftc.vision.VisionPortal;
+import org.firstinspires.ftc.vision.tfod.TfodProcessor;
+import org.firstinspires.ftc.teamcode.tuning.TuningOpModes;
+
+import java.util.List;
 
 
-@Autonomous(name="Auton Master", group="Linear OpMode")
+@Autonomous(name="AutonMaster 13217", group="Autonomous")
 
-public class AutonMaster extends LinearOpMode {
-
-    // Declare OpMode members for each of the 4 motors.
-    private ElapsedTime runtime = new ElapsedTime();
-    private DcMotor leftFrontDrive = null;
-    private DcMotor leftBackDrive = null;
-    private DcMotor rightFrontDrive = null;
-    private DcMotor rightBackDrive = null;
+public final class AutonMaster extends LinearOpMode {
 
     @Override
     public void runOpMode() {
+        VisionPortal.Builder build = new VisionPortal.Builder();
+        build.setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
 
-        //get the hardware configurations
-        leftFrontDrive  = hardwareMap.get(DcMotor.class, "leftFront");
-        leftBackDrive  = hardwareMap.get(DcMotor.class, "leftRear");
-        rightFrontDrive = hardwareMap.get(DcMotor.class, "rightFront");
-        rightBackDrive = hardwareMap.get(DcMotor.class, "rightRear");
-        
-        //set direction of motors
-        leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
-        leftBackDrive.setDirection(DcMotor.Direction.REVERSE);
-        rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
-        rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
+        OurRobot myRobot = new OurRobot(build);
 
-        // Wait for the game to start (driver presses PLAY)
+        String teamPropLocation = new String("notFound");
+        while (!isStarted() && !isStopRequested()) {
+            if (teamPropLocation.equals("notFound")) {
+                teamPropLocation = myRobot.telemetryTfod();
+            }
+            telemetry.addData("team prop location: ", teamPropLocation);
+            telemetry.addData("go to: ", teamPropLocation);
+            telemetry.update();
+        }
+
         telemetry.addData("Status", "Initialized");
         telemetry.update();
 
-        waitForStart();
-        runtime.reset();
-        //create an object of OurRobot class called myRobot such that myRobot has access to all methods that 
-        //OurRobot can do
-        //create it with the constructor that takes in all the configured motor objects. 
-        OurRobot myRobot = new OurRobot(leftFrontDrive,leftBackDrive,rightFrontDrive,rightBackDrive);
-        // run until the end of the match (driver presses STOP)
-        while (opModeIsActive()) {
-            //test the move and stop method that is in the OurRobot function through the myRobot object.
-            myRobot.move();
-            sleep(2000);
-            myRobot.stop();
-            sleep(2000);
-            
-            
-            telemetry.addData("Status", "Run Time: " + runtime.toString());
-            telemetry.update();
+        if (TuningOpModes.DRIVE_CLASS.equals(MecanumDrive.class)) {
+            MecanumDrive drive = new MecanumDrive(hardwareMap, new Pose2d(0, 0, 0));
+            waitForStart();
+
+
+            //x is always -25
+            //y for left, middle, right, respectively
+            //-15, 0, 10
+
+            if (teamPropLocation == "left"){
+                Actions.runBlocking(
+                        drive.actionBuilder(drive.pose)
+                                .strafeToConstantHeading(new Vector2d(20,-15))
+                                .build()
+                );
+            }
+            if (teamPropLocation == "notFound"  || teamPropLocation == "middle"){
+                Actions.runBlocking(    
+                        drive.actionBuilder(drive.pose)
+                                .strafeToConstantHeading(new Vector2d(20,0))
+                                .build()
+                );
+            }
+            if (teamPropLocation == "right"){
+                Actions.runBlocking(
+                        drive.actionBuilder(drive.pose)
+                                .strafeToConstantHeading(new Vector2d(20,10))
+                                .build()
+                );
+            }
         }
     }
 }
 
+//TODO: clean up useless comments and remove extra redundancy that may cause bugs
 
-//create a class for our robot functions called OurRobot
 class OurRobot{
-    
     private DcMotor lf = null;
     private DcMotor lb = null;
     private DcMotor rf = null;
     private DcMotor rb = null;
+    private DcMotor arm = null;
+
+    private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
+    private static final String TFOD_MODEL_ASSET = "MyModelStoredAsAsset.tflite";
+    private static final String TFOD_MODEL_FILE = "/sdcard/FIRST/tflitemodels/TeamPropTest2CenterStageModel.tflite";
+    private static final String[] LABELS = {"prop", "p"};
+    private TfodProcessor tfod;
+    private VisionPortal visionPortal;
+    private VisionPortal.Builder builder;
 
 
     //This constructor takes in the motors which are of class DcMotor
-    public OurRobot(DcMotor leftFront, DcMotor leftBack, DcMotor rightFront, DcMotor rightBack){
-        lf = leftFront; 
-        lb = leftBack;
-        rf = rightFront;
-        rb = rightBack;
-    }
-    
-    //functions that OurRobot can do :
-    void move(){
-        lf.setPower(0.2);
-        rf.setPower(0.2);
-        lb.setPower(0.2);
-        rb.setPower(0.2);
-        
-    }
-    void stop(){
-        lf.setPower(0);
-        rf.setPower(0);
-        lb.setPower(0);
-        rb.setPower(0);
+    public OurRobot(VisionPortal.Builder build1){
+        builder = build1;
+        initTfod();
     }
 
+
+    //Tensorflow Object Detection functions:
+    public void initTfod() {
+
+        // Create the TensorFlow processor by using a builder.
+        tfod = new TfodProcessor.Builder()
+                .setModelFileName(TFOD_MODEL_FILE)
+                .setModelLabels(LABELS)
+                .build();
+        builder.addProcessor(tfod);
+        visionPortal = builder.build();
+    }
+
+    public String telemetryTfod() {
+
+        List<Recognition> currentRecognitions = tfod.getRecognitions();
+
+        for (Recognition recognition : currentRecognitions) {
+            double x = (recognition.getLeft() + recognition.getRight()) / 2;
+            double y = (recognition.getTop() + recognition.getBottom()) / 2;
+            if (x <= 190) {
+                return "left";
+            } else if (x <= 465) {
+                return "middle";
+            } else {
+                return "right";
+            }
+        }
+        return "notFound";
+    }
 }
-
